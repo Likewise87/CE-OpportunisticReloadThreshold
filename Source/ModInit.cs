@@ -118,26 +118,46 @@ namespace TSA.CE.OpportunisticReloadThreshold
 	{
 		internal static void TryApplyDefault(CompAmmoUser? ammo)
 		{
-			if (ammo == null || !ammo.HasMagazine)
+			if (ammo == null)
 			{
 				return;
 			}
 
-			int magSize = ammo.MagSize;
-			if (magSize <= 1)
+			// Never touch CompAmmoUser getters during save/load — other MagSize patches
+			// (e.g. Holder/Wielder/PrimaryVerb) can NRE while the gun is still wiring up.
+			if (Scribe.mode != LoadSaveMode.Inactive)
 			{
 				return;
 			}
 
 			// One-off default only — leave player-tuned (or previously set) values alone.
+			// Check before HasMagazine/MagSize so load-time / exotic MagSize postfixes are avoided.
 			if (ammo.TryReloadOn != 0)
 			{
 				return;
 			}
 
-			float fraction = OpportunisticReload_Settings.Current?.ThresholdFraction ?? 0.8f;
-			// Match CE's gizmo slider: Floor(fraction * MagSize).
-			ammo.TryReloadOn = Mathf.FloorToInt(fraction * magSize);
+			try
+			{
+				if (!ammo.HasMagazine)
+				{
+					return;
+				}
+
+				int magSize = ammo.MagSize;
+				if (magSize <= 1)
+				{
+					return;
+				}
+
+				float fraction = OpportunisticReload_Settings.Current?.ThresholdFraction ?? 0.8f;
+				// Match CE's gizmo slider: Floor(fraction * MagSize).
+				ammo.TryReloadOn = Mathf.FloorToInt(fraction * magSize);
+			}
+			catch (Exception)
+			{
+				// Soft-fail if another mod's MagSize patch blows up mid-init.
+			}
 		}
 	}
 
